@@ -59,6 +59,7 @@ def get_bert_input(input_sender):
     output = bert_model(**inputs)
     return output[1].detach().numpy().tolist()
 
+#將資料輸入給bert取輸出
 def read_train_data(select, case):
     with open('./dataset/train_cn.json', encoding='utf-8') as f:  
         train_data = json.load(f)
@@ -111,6 +112,8 @@ def read_dev_data(path):
     test_data = torch.tensor(input_list, dtype=torch.float, device=device)
     return test_data, len_, _id
 
+
+# 資料平均擷取以及打亂
 def shuffle_data(key):
     with open('./select_{}_id.json'.format(key)) as f:
         id_data = json.load(f)
@@ -189,24 +192,17 @@ def training_and_predictions(x, test, quality):
     torch.save(models.state_dict(), f=f'./model{quality}.pth')
     return pred
 
-def data(select_id, x_temp, y_temp):
-    x = list()
-    y = list()
-    for _id in select_id:
-        x.append(x_temp[_id])
-        y.append(y_temp[_id])
+
+select_a = shuffle_data('a')
+select_s = shuffle_data('s')
+select_e = shuffle_data('e')
+
+data_a = read_train_data(select_a, 'A')
+data_s = read_train_data(select_s, 'S')
+data_e = read_train_data(select_e, 'E')
 
 
-select_a = select_data('a')
-select_s = select_data('s')
-select_e = select_data('e')
-
-data_a = read_data(select_a, 'A')
-data_s = read_data(select_s, 'S')
-data_e = read_data(select_e, 'E')
-
-
-test_X, test_len, test_id = read_dev_data('./dataset/dev_cn.json')
+test, test_len, test_id = read_dev_data('./dataset/dev_cn.json')
 result_a = training_and_predictions(data_a, test, 'A')
 result_s = training_and_predictions(data_s, test, 'S')
 result_e = training_and_predictions(data_e, test, 'E')
