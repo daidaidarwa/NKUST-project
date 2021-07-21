@@ -12,27 +12,34 @@ device = torch.device('cuda:0')
 select_a = list()
 select_s = list()
 select_e = list()
+
 class BiLSTM(torch.nn.Module):
     def __init__(self):
         super(BiLSTM, self).__init__()
         self.label = 5
         self.bilstm = torch.nn.GRU(input_size = 768, hidden_size =256, batch_first= True, bidirectional= True)
         self.DropL = torch.nn.Dropout(0.3)
-        self.bilstm2 = torch.nn.GRU(input_size = 512, hidden_size =128, batch_first= True, bidirectional= True)
+        self.bilstm2 = torch.nn.GRU(input_size = 512, hidden_size =512, batch_first= True, bidirectional= True)
+        self.muti_ha = torch.nn.MultiheadAttention(embed_dim=512, num_heads=8, dropout=0.2)
         self.DropL2 = torch.nn.Dropout(0.3)
-        self.dense = torch.nn.Linear(256, 1024)
+        self.dense = torch.nn.Linear(512, 1024)
         self.DropD = torch.nn.Dropout(0.3)
-        self.classifier = torch.nn.Linear(1024, self.label)
+    
+        
+        self.classifier = torch.nn.Linear(512, self.label)
 
     def forward(self, x, y=None):
-        layout1 = torch.nn.functional.tanh(self.bilstm(x)[0])
+        layout1 = self.bilstm(x)[0]
         layout1 = self.DropL(layout1)
-        layout2 = torch.nn.functional.tanh(self.bilstm2(layout1)[0][0][-1])
-        layout2 = self.DropL2(layout2)
-        layout3 = torch.nn.functional.relu(self.dense(layout2))
-        layout3 = self.DropD(layout3)
-        pred = torch.nn.functional.softmax(self.classifier(layout3))
-        
+        # layout2 = self.bilstm2(layout1)[0]
+        # layout2 = self.DropL2(layout2)
+        # layout3 = torch.nn.functional.relu(self.dense(layout2), inplace=True)
+        # layout3 = self.DropD(layout3)
+        layout = layout1.reshape(7, layout1.shape[0], 512)
+        attoutput, attn_output_weights = self.muti_ha(layout, layout, layout)
+        attoutput = attoutput.reshape(attoutput.shape[1], 7, 512)
+        pred = torch.nn.functional.softmax(self.classifier(attoutput), -1)
+        y_pred = pred[:, -1]
         # if y != None:
         #     # ow_ = 0
         #     # ow = 0
@@ -52,7 +59,7 @@ class BiLSTM(torch.nn.Module):
         #     rsnod = loss_fn(pred, y)
         #     return rsnod
         # else:
-        return pred
+        return y_pred
 
 def get_bert_input(input_sender):
     inputs = tokenzer(input_sender, return_tensors ='pt', padding='max_length', truncation=True, max_length=256)
@@ -60,6 +67,7 @@ def get_bert_input(input_sender):
     return output[1].detach().numpy().tolist()
 
 #將資料輸入給bert取輸出
+
 def read_train_data(select, case):
     with open('./dataset/train_cn.json', encoding='utf-8') as f:  
         train_data = json.load(f)
@@ -67,8 +75,9 @@ def read_train_data(select, case):
     total_x = list()
     y_temp = list()
     total_y = list()
+    a = 0
     for info in train_data:
-        if info['id'] not in select:
+        if info['id'] in select:
             for text in info['turns']: #擷取每個客戶以及客服的訊息
                 str_temp = ''
                 for value in text['utterances']: 
@@ -83,11 +92,10 @@ def read_train_data(select, case):
             total_y.append([y_temp.count(-2)/19, y_temp.count(-1)/19, y_temp.count(0)/19, y_temp.count(1)/19, y_temp.count(2)/19])
             sender_list.clear()
             y_temp.clear()
-
     x = torch.tensor(total_x, dtype=torch.float, device=device)
     y = torch.tensor(total_y, dtype=torch.float, device=device)
     data = TensorDataset(x, y)
-    return DataLoader(dataset = data, batch_size = 32, shuffle = True)
+    return DataLoader(dataset = data,  batch_size=32,shuffle = True)
 
 def read_dev_data(path):
     sender_list = list()
@@ -97,14 +105,13 @@ def read_dev_data(path):
     with open(path, encoding='utf-8') as f:  
             data = json.load(f)
     for i in data:
-        str_temp = ''
         _id.append(i['id'])
         len_.append(len(i['turns']))
         for text in i['turns']: #擷取每個客戶以及客服的訊息
+            str_temp = '' 
             for value in text['utterances']: 
                 str_temp += value
             sender_list.append(get_bert_input(str_temp)[0])
-            str_temp = '' 
         for pad in range(len(sender_list), 7):
             sender_list.append(get_bert_input('')[0])
         input_list.append(sender_list.copy())
@@ -165,47 +172,70 @@ def shuffle_data(key):
     random.shuffle(total)
     return total
 
-def training_and_predictions(x, test, quality):                
+def training_and_predictions(x, quality, test=None):                
+    def _loss_fn(pred, y_true, batch_size):
+        step_sod = list()
+        for batch in range(batch_size):
+            ow_ = 0
+            ow = 0
+            pi = [i for i in range(5) if y_true[batch][i] > 0]
+            pi_ = [i for i in range(5) if pred[batch][i] > 0]
+            for i in pi:
+                for j in range(5):
+                    ow += abs(i-j)*math.pow((pred[batch][j] - y_true[batch][j]), 2)
+            for i in pi_:
+                for j in range(5):
+                    ow_ += abs(i-j)*math.pow((pred[batch][j] - y_true[batch][j]), 2)
+            ow_ = ow_ / len(pi_)
+            ow = ow / len(pi_)
+            sod = (ow_ + ow) / 2
+            step_sod.append(math.sqrt((sod/4)))
+        rsnod = np.mean(step_sod)
+        return torch.tensor(rsnod, dtype=torch.float, requires_grad=True)
     pred = list()
     step_pred = list()
     models = BiLSTM()
     models.to(device)
     models.train()
-    loss_fn = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(models.parameters(), lr=0.0001)
+    loss_mse = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(models.parameters(), lr=0.00001)
     for epoch in range(150):
-        optimizer.zero_grad()
+    
         for step, (batch_x, batch_y) in enumerate(x):
-            for batch in range(batch_x.shape[0]):
-                inputs = batch_x[batch].unsqueeze(0)
-                step_pred.append(models(inputs, batch_y[batch]).tolist())
-            batch_pred = torch.tensor(step_pred, dtype=torch.float, device=device).requires_grad_()
-            loss = loss_fn(batch_pred, batch_y)
+            optimizer.zero_grad()
+            # for batch in range(batch_x.shape[0]):
+            #     inputs = batch_x[batch].unsqueeze(0)
+            #     step_pred.append(models(inputs, batch_y[batch]).tolist())
+            output = models(batch_x)
+            loss = loss_mse(output, batch_y)
             loss.backward()
             optimizer.step()
-            step_pred.clear()
         print(f'epoch:{epoch} | epoch_rnsod:{loss}')
-    with torch.no_grad():
-        for test_x in test:
-            tests = test_x.unsqueeze(0)
-            pred.append(models(tests).tolist())
     torch.save(models.state_dict(), f=f'./model{quality}.pth')
-    return pred
+    if test != None:
+        with torch.no_grad():
+            test_output = models(test)
+        return test_output.tolist()
+    else:
+        return None
+        
 
 
 select_a = shuffle_data('a')
-select_s = shuffle_data('s')
-select_e = shuffle_data('e')
+# select_s = shuffle_data('s')
+# select_e = shuffle_data('e')
 
 data_a = read_train_data(select_a, 'A')
-data_s = read_train_data(select_s, 'S')
-data_e = read_train_data(select_e, 'E')
+# data_s = read_train_data(select_s, 'S')
+# data_e = read_train_data(select_e, 'E')
 
 
 test, test_len, test_id = read_dev_data('./dataset/dev_cn.json')
-result_a = training_and_predictions(data_a, test, 'A')
-result_s = training_and_predictions(data_s, test, 'S')
-result_e = training_and_predictions(data_e, test, 'E')
+result_a = training_and_predictions(data_a, 'A', test)
+
+# result_s = training_and_predictions(data_s, 'S')
+# result_e = training_and_predictions(data_e, 'E')
+
 
 temp = dict()
 total_list = list()
@@ -222,16 +252,16 @@ for i in range(390):
     total_list[i]['quality']['A']['0'] = result_a[i][2]
     total_list[i]['quality']['A']['1'] = result_a[i][3]
     total_list[i]['quality']['A']['2'] = result_a[i][4]
-    total_list[i]['quality']['E']['-2'] = result_e[i][0]
-    total_list[i]['quality']['E']['-1'] = result_e[i][1]
-    total_list[i]['quality']['E']['0'] = result_e[i][2]
-    total_list[i]['quality']['E']['1'] = result_e[i][3]
-    total_list[i]['quality']['E']['2'] = result_e[i][4]
-    total_list[i]['quality']['S']['-2'] = result_s[i][0]
-    total_list[i]['quality']['S']['-1'] = result_s[i][1]
-    total_list[i]['quality']['S']['0'] = result_s[i][2]
-    total_list[i]['quality']['S']['1'] = result_s[i][3]
-    total_list[i]['quality']['S']['2'] = result_s[i][4]
+#     total_list[i]['quality']['E']['-2'] = result_e[i][0]
+#     total_list[i]['quality']['E']['-1'] = result_e[i][1]
+#     total_list[i]['quality']['E']['0'] = result_e[i][2]
+#     total_list[i]['quality']['E']['1'] = result_e[i][3]
+#     total_list[i]['quality']['E']['2'] = result_e[i][4]
+#     total_list[i]['quality']['S']['-2'] = result_s[i][0]
+#     total_list[i]['quality']['S']['-1'] = result_s[i][1]
+#     total_list[i]['quality']['S']['0'] = result_s[i][2]
+#     total_list[i]['quality']['S']['1'] = result_s[i][3]
+#     total_list[i]['quality']['S']['2'] = result_s[i][4]
 
 
 with open('result_ptgru.json', 'w+', encoding = 'utf-8') as f:

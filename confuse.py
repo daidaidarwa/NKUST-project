@@ -18,32 +18,32 @@ cls_preE = list()
 seq_preA = list()
 seq_preS = list()
 seq_preE = list()
-with open('./quality_dq.json', 'r', encoding='utf-8') as f:
-    dq_data = json.load(f)
+# with open('./quality_dq.json', 'r', encoding='utf-8') as f:
+#     dq_data = json.load(f)
 
-with open('./result_qualityRSNOD.json', 'r', encoding='utf-8') as f:
+with open('./result_ptgru.json', 'r', encoding='utf-8') as f:
     cls_data = json.load(f)
 
-with open('./result_qualitySEQGRU.json', 'r', encoding='utf-8') as f:
-    seq_data = json.load(f)
+# with open('./result_qualitySEQGRU.json', 'r', encoding='utf-8') as f:
+#     seq_data = json.load(f)
 
-for dq_bin in dq_data:
-    dq_preA.append(max(dq_bin['quality']['A'], key=dq_bin['quality']['A'].get))
-    dq_preS.append(max(dq_bin['quality']['S'], key=dq_bin['quality']['S'].get))
-    dq_preE.append(max(dq_bin['quality']['E'], key=dq_bin['quality']['E'].get))
-dq_data.clear()
+# for dq_bin in dq_data:
+#     dq_preA.append(max(dq_bin['quality']['A'], key=dq_bin['quality']['A'].get))
+#     dq_preS.append(max(dq_bin['quality']['S'], key=dq_bin['quality']['S'].get))
+#     dq_preE.append(max(dq_bin['quality']['E'], key=dq_bin['quality']['E'].get))
+# dq_data.clear()
 
 for cls_bin in cls_data:
     cls_preA.append(max(cls_bin['quality']['A'], key=cls_bin['quality']['A'].get))
-    cls_preS.append(max(cls_bin['quality']['S'], key=cls_bin['quality']['S'].get))
-    cls_preE.append(max(cls_bin['quality']['E'], key=cls_bin['quality']['E'].get))
+    # cls_preS.append(max(cls_bin['quality']['S'], key=cls_bin['quality']['S'].get))
+    # cls_preE.append(max(cls_bin['quality']['E'], key=cls_bin['quality']['E'].get))
 cls_data.clear()
 
-for seq_bin in seq_data:
-    seq_preA.append(max(seq_bin['quality']['A'], key=seq_bin['quality']['A'].get))
-    seq_preS.append(max(seq_bin['quality']['S'], key=seq_bin['quality']['S'].get))
-    seq_preE.append(max(seq_bin['quality']['E'], key=seq_bin['quality']['E'].get))
-seq_data.clear()
+# for seq_bin in seq_data:
+#     seq_preA.append(max(seq_bin['quality']['A'], key=seq_bin['quality']['A'].get))
+#     seq_preS.append(max(seq_bin['quality']['S'], key=seq_bin['quality']['S'].get))
+#     seq_preE.append(max(seq_bin['quality']['E'], key=seq_bin['quality']['E'].get))
+# seq_data.clear()
 
 
 with open('./dataset/dev_cn.json', encoding='utf-8') as f:  
@@ -78,17 +78,17 @@ def draw(trueA, preA, trueS, preS, trueE, preE):
     for p, p_ in zip(trueA, preA):
         confuse_a[p][bin_.index(p_)] += 1
 
-    confuse_e = {'-2' : [0, 0, 0, 0, 0], '-1' : [0, 0, 0, 0, 0], '0' : [0, 0, 0, 0, 0], '1' : [0, 0, 0, 0, 0], '2' : [0, 0, 0, 0, 0]}
-    for p, p_ in  zip(trueE, preE):
-        confuse_e[p][bin_.index(p_)] += 1
+    # confuse_e = {'-2' : [0, 0, 0, 0, 0], '-1' : [0, 0, 0, 0, 0], '0' : [0, 0, 0, 0, 0], '1' : [0, 0, 0, 0, 0], '2' : [0, 0, 0, 0, 0]}
+    # for p, p_ in  zip(trueE, preE):
+    #     confuse_e[p][bin_.index(p_)] += 1
 
-    confuse_s = {'-2' : [0, 0, 0, 0, 0], '-1' : [0, 0, 0, 0, 0], '0' : [0, 0, 0, 0, 0], '1' : [0, 0, 0, 0, 0], '2' : [0, 0, 0, 0, 0]}
-    for p, p_ in  zip(trueS, preS):
-        confuse_s[p][bin_.index(p_)] += 1
+    # confuse_s = {'-2' : [0, 0, 0, 0, 0], '-1' : [0, 0, 0, 0, 0], '0' : [0, 0, 0, 0, 0], '1' : [0, 0, 0, 0, 0], '2' : [0, 0, 0, 0, 0]}
+    # for p, p_ in  zip(trueS, preS):
+    #     confuse_s[p][bin_.index(p_)] += 1
     
     show(confuse_a)
-    show(confuse_s)
-    show(confuse_e)
+    # show(confuse_s)
+    # show(confuse_e)
 
 # draw(A, dq_preA, S, dq_preS, E, dq_preE)
 # draw(A, seq_preA, S, seq_preS, E, seq_preE)

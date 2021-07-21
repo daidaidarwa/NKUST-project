@@ -193,9 +193,6 @@ def data(select_id, x_temp, y_temp):
     npy = np.array(y, dtype='float')
     return npx, npy
 
-def my_losses(y_true, y_pred):
-    print(y_pred[1])
-    return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 def Score_a_val(x, y, test_x, batch, epoch):    
     keras_model = tf.keras.Sequential()
@@ -211,7 +208,7 @@ def Score_a_val(x, y, test_x, batch, epoch):
     keras_model.add(tf.keras.layers.Dropout(0.2))
     keras_model.add(tf.keras.layers.Dense(5, activation = 'softmax'))
     print(keras_model.summary())
-    keras_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss=my_losses, metrics=[tf.keras.metrics.MeanSquaredError()])    
+    keras_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mse', metrics=[tf.keras.metrics.MeanSquaredError()])    
     a_process = keras_model.fit(x, y, epochs = epoch, batch_size = batch, validation_split=0.2)
     # show_train_history(a_process, 'loss', 'val_loss')
 #     show_train_history(a_process, 'accuracy', 'val_accuracy')
